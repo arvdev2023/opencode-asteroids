@@ -44,3 +44,4 @@ Luego visita `http://localhost:3000`.
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
 - Power-up "Velocidad": al destruir asteroides puede soltarse un rayo que, al recogerlo, duplica la propulsión de la nave durante 5 segundos
+- Estrella fugaz: cada 8-16 s aparece un asteroide dorado muy veloz que se desvanece a los 7 s; destruirla antes da 250 puntos extra
