@@ -201,6 +201,7 @@ class Ship {
     this.invincible    = 3;
     this.shootCooldown = 0;
     this.speedBoost    = 0;
+    this.tripleShot    = 0;
     this.dead          = false;
   }
 
@@ -209,6 +210,7 @@ class Ship {
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     if (this.speedBoost    > 0) this.speedBoost    -= dt;
+    if (this.tripleShot    > 0) this.tripleShot    -= dt;
 
     const ROT   = 3.5;   // rad/s
     const THRUST = this.speedBoost > 0 ? 520 : 260;  // px/s² (duplica con Velocidad)
@@ -235,6 +237,13 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
+    // Triple Disparo: 3 balas paralelas, mismo ángulo (línea recta, sin dispersión)
+    if (this.tripleShot > 0) {
+      const GAP = 6;
+      const px = -Math.sin(this.angle);
+      const py =  Math.cos(this.angle);
+      return [-GAP, 0, GAP].map(o => new Bullet(ox + px * o, oy + py * o, this.angle));
+    }
     return [new Bullet(ox, oy, this.angle)];
   }
 
@@ -246,8 +255,8 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    // Nave en cian mientras dura el efecto de Velocidad
-    ctx.strokeStyle = this.speedBoost > 0 ? '#0ff' : '#fff';
+    // Nave coloreada según el efecto activo (Velocidad: cian, Triple: magenta)
+    ctx.strokeStyle = this.speedBoost > 0 ? '#0ff' : this.tripleShot > 0 ? '#f0f' : '#fff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
@@ -306,13 +315,15 @@ class Particle {
   }
 }
 
-// ── Power-up "Velocidad" ──────────────────────────────────────────────────────
-const DROP_CHANCE = 0.12;  // probabilidad de que un asteroide destruido suelte el ítem
+// ── Power-ups ("Velocidad" y "Triple Disparo") ────────────────────────────────
+const DROP_CHANCE = 0.12;  // probabilidad de que un asteroide destruido suelte un ítem
 const ITEM_TTL    = 10;    // segundos que el ítem flota en pantalla
-const BOOST_TIME  = 5;     // duración del efecto al recogerlo
+const BOOST_TIME  = 5;     // duración de "Velocidad" al recogerlo
+const TRIPLE_TIME = 5;     // duración de "Triple Disparo" al recogerlo
 
 class PowerUp {
-  constructor(x, y) {
+  constructor(x, y, type = 'speed') {
+    this.type = type;
     this.x      = x;
     this.y      = y;
     this.radius = 10;
@@ -338,20 +349,31 @@ class PowerUp {
 
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.strokeStyle = '#0ff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
-    // Rayo
-    ctx.beginPath();
-    ctx.moveTo( 3, -10);
-    ctx.lineTo(-5,   2);
-    ctx.lineTo(-1,   2);
-    ctx.lineTo(-3,  10);
-    ctx.lineTo( 5,  -2);
-    ctx.lineTo( 1,  -2);
-    ctx.closePath();
-    ctx.stroke();
+    if (this.type === 'triple') {
+      // Tres balas en fila (magenta)
+      ctx.strokeStyle = '#f0f';
+      for (const ox of [-6, 0, 6]) {
+        ctx.beginPath();
+        ctx.moveTo(ox, -7);
+        ctx.lineTo(ox,  7);
+        ctx.stroke();
+      }
+    } else {
+      // Rayo (cian)
+      ctx.strokeStyle = '#0ff';
+      ctx.beginPath();
+      ctx.moveTo( 3, -10);
+      ctx.lineTo(-5,   2);
+      ctx.lineTo(-1,   2);
+      ctx.lineTo(-3,  10);
+      ctx.lineTo( 5,  -2);
+      ctx.lineTo( 1,  -2);
+      ctx.closePath();
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -461,7 +483,7 @@ function update(dt) {
         explode(a.x, a.y, a instanceof ShootingStar ? 12 : a.size * 5);
         newAsteroids.push(...a.split());
         if (!(a instanceof ShootingStar) && Math.random() < DROP_CHANCE)
-          powerups.push(new PowerUp(a.x, a.y));
+          powerups.push(new PowerUp(a.x, a.y, Math.random() < 0.5 ? 'speed' : 'triple'));
       }
     }
   }
@@ -478,12 +500,13 @@ function update(dt) {
     }
   }
 
-  // Nave vs power-up (recoger reinicia el timer a BOOST_TIME)
+  // Nave vs power-up (recoger reinicia el timer del efecto correspondiente)
   if (!ship.dead) {
     for (const p of powerups) {
       if (dist(ship, p) < ship.radius + p.radius) {
         p.dead = true;
-        ship.speedBoost = BOOST_TIME;
+        if (p.type === 'triple') ship.tripleShot = TRIPLE_TIME;
+        else                     ship.speedBoost = BOOST_TIME;
       }
     }
   }
@@ -531,21 +554,36 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
-  drawBoostBar();
+  drawEffectBars();
 }
 
-function drawBoostBar() {
-  if (state !== 'playing' || ship.speedBoost <= 0) return;
-  const w    = 120;
-  const frac = Math.max(ship.speedBoost / BOOST_TIME, 0);
-  ctx.fillStyle   = '#0ff';
+function drawEffectBar(label, frac, color, border, rectY) {
+  const w = 120;
+  ctx.fillStyle   = color;
   ctx.font        = '11px monospace';
   ctx.textAlign   = 'left';
-  ctx.fillText('VELOCIDAD', 14, H - 28);
-  ctx.strokeStyle = 'rgba(0,255,255,0.5)';
+  ctx.fillText(label, 14, rectY - 8);
+  ctx.strokeStyle = border;
   ctx.lineWidth   = 1;
-  ctx.strokeRect(14, H - 20, w, 7);
-  ctx.fillRect(15, H - 19, (w - 2) * frac, 5);
+  ctx.strokeRect(14, rectY, w, 7);
+  ctx.fillRect(15, rectY + 1, (w - 2) * frac, 5);
+}
+
+function drawEffectBars() {
+  if (state !== 'playing') return;
+  const bars = [];
+  if (ship.speedBoost > 0)
+    bars.push({ label: 'VELOCIDAD', frac: Math.max(ship.speedBoost / BOOST_TIME, 0),
+                color: '#0ff', border: 'rgba(0,255,255,0.5)' });
+  if (ship.tripleShot > 0)
+    bars.push({ label: 'TRIPLE',    frac: Math.max(ship.tripleShot / TRIPLE_TIME, 0),
+                color: '#f0f', border: 'rgba(255,0,255,0.5)' });
+  // Barras apiladas hacia arriba desde abajo-izquierda
+  let rectY = H - 20;
+  for (const b of bars) {
+    drawEffectBar(b.label, b.frac, b.color, b.border, rectY);
+    rectY -= 26;
+  }
 }
 
 function drawOverlay(title, sub) {
