@@ -39,6 +39,8 @@ Luego visita `http://localhost:3000`.
 | Mediano   | 50     |
 | Pequeño   | 100    |
 
+Con la skin "Morada" todos los puntos se duplican.
+
 ## Características
 
 - 3 vidas con invencibilidad temporal al reaparecer (parpadeo)
@@ -48,5 +50,6 @@ Luego visita `http://localhost:3000`.
 - Power-up "Triple Disparo": el ítem magenta hace que la nave dispare 3 balas paralelas en línea recta durante 5 segundos
 - Power-up "Escudo": el ítem verde crea un anillo verde alrededor de la nave durante 6 segundos que desvía los asteroides en vez de destruirte (cada impacto absorbido consume 1,5 s del escudo)
 - Los ítems sueltados son 1/3 para cada tipo
-- Skins de la nave: la tecla `C` cicla entre 5 siluetas con distinto color y forma; la preferencia se guarda en `localStorage`
+- Skins de la nave: la tecla `C` cicla entre 6 siluetas con distinto color y forma; la preferencia se guarda en `localStorage`
+- Skin "Morada": nave morada el doble de grande que la original que duplica todos los puntos obtenidos (a cambio de una hitbox también doble)
 - Estrella fugaz: cada 8-16 s aparece un asteroide dorado muy veloz que se desvanece a los 7 s; destruirla antes da 250 puntos extra
