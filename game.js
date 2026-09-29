@@ -193,6 +193,8 @@ const SKINS = [
   { name: 'HALCÓN',  color: '#f0f',    verts: [[18,0],[-10,-12],[-6,0],[-10,12]] },
   { name: 'TITÁN',   color: '#0f0',    verts: [[14,0],[-2,-7],[-10,-10],[-8,0],[-10,10],[-2,7]] },
   { name: 'AGUJA',   color: '#ffd700', verts: [[23,0],[-9,-3],[-14,-6],[-11,0],[-14,6],[-9,3]] },
+  // MORADA: el doble de grande que la CLÁSICA; duplica los puntos (y también la hitbox)
+  { name: 'MORADA',  color: '#a020f0', verts: [[40,0],[-24,-18],[-14,0],[-24,18]], scale: 2, scoreMultiplier: 2 },
 ];
 
 // La llama del propulsor se ancla al punto más trasero de cada silueta
@@ -212,6 +214,11 @@ function saveSkin() {
   try { localStorage.setItem('asteroids-skin', String(skinIndex)); } catch (e) {}
 }
 
+// Escala de la skin activa (MORADA es el doble de grande; el resto, tamaño normal)
+function skinScale() {
+  return SKINS[skinIndex].scale || 1;
+}
+
 // ── Ship ──────────────────────────────────────────────────────────────────────
 class Ship {
   constructor() { this.reset(); }
@@ -222,7 +229,7 @@ class Ship {
     this.angle  = -Math.PI / 2;
     this.vx     = 0;
     this.vy     = 0;
-    this.radius = 12;
+    this.radius = 12 * skinScale();  // la hitbox acompaña al tamaño de la skin
     this.thrusting     = false;
     this.invincible    = 3;
     this.shootCooldown = 0;
@@ -262,7 +269,7 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-    const NOSE = 21;
+    const NOSE = 21 * skinScale();  // la bala nace justo delante de la nariz
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
     // Triple Disparo: 3 balas paralelas, mismo ángulo (línea recta, sin dispersión)
@@ -280,7 +287,8 @@ class Ship {
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
-    const skin = SKINS[skinIndex];
+    const skin  = SKINS[skinIndex];
+    const scale = skinScale();
 
     ctx.save();
     ctx.translate(this.x, this.y);
@@ -301,9 +309,9 @@ class Ship {
     // Llama del propulsor, anclada a la parte trasera de la silueta
     if (this.thrusting && Math.random() > 0.35) {
       ctx.beginPath();
-      ctx.moveTo(skin.flameX, -4);
-      ctx.lineTo(skin.flameX - rand(6, 14), 0);
-      ctx.lineTo(skin.flameX,  4);
+      ctx.moveTo(skin.flameX, -4 * scale);
+      ctx.lineTo(skin.flameX - rand(6, 14) * scale, 0);
+      ctx.lineTo(skin.flameX,  4 * scale);
       ctx.strokeStyle = 'rgba(255, 130, 0, 0.85)';
       ctx.stroke();
     }
@@ -315,7 +323,7 @@ class Ship {
       ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
       ctx.lineWidth   = 1.5;
       ctx.beginPath();
-      ctx.arc(0, 0, SHIELD_RADIUS * pulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, SHIELD_RADIUS * scale * pulse, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -527,6 +535,7 @@ function update(dt) {
   if (skinLabelTimer > 0) skinLabelTimer -= dt;
   if (pressed('KeyC')) {
     skinIndex = (skinIndex + 1) % SKINS.length;
+    ship.radius = 12 * skinScale();  // la hitbox acompaña a la skin activa
     skinLabelTimer = 1.5;
     saveSkin();
   }
@@ -571,7 +580,8 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += a.points;
+        // La skin MORADA duplica los puntos de todo lo destruido
+        score += a.points * (SKINS[skinIndex].scoreMultiplier || 1);
         explode(a.x, a.y, a instanceof ShootingStar ? 12 : a.size * 5);
         newAsteroids.push(...a.split());
         if (!(a instanceof ShootingStar) && Math.random() < DROP_CHANCE)
@@ -624,6 +634,8 @@ function update(dt) {
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function drawLifeIcon(x, y) {
   const skin = SKINS[skinIndex];
+  // Escala normalizada: toda skin luce del mismo tamaño en el HUD (la MORADA no desborda)
+  const s = 9 / Math.max(...skin.verts.flatMap(v => [Math.abs(v[0]), Math.abs(v[1])]));
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
@@ -631,9 +643,9 @@ function drawLifeIcon(x, y) {
   ctx.lineWidth   = 1.2;
   ctx.lineJoin    = 'round';
   ctx.beginPath();
-  ctx.moveTo(skin.verts[0][0] * 0.45, skin.verts[0][1] * 0.45);
+  ctx.moveTo(skin.verts[0][0] * s, skin.verts[0][1] * s);
   for (let i = 1; i < skin.verts.length; i++)
-    ctx.lineTo(skin.verts[i][0] * 0.45, skin.verts[i][1] * 0.45);
+    ctx.lineTo(skin.verts[i][0] * s, skin.verts[i][1] * s);
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
@@ -652,11 +664,13 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
-  // Rótulo transitorio al cambiar de skin con C
+  // Rótulo transitorio al cambiar de skin con C (avisa del bonus de puntos si aplica)
   if (skinLabelTimer > 0) {
-    ctx.fillStyle = SKINS[skinIndex].color;
+    const skin  = SKINS[skinIndex];
+    const bonus = skin.scoreMultiplier > 1 ? `  (PUNTOS x${skin.scoreMultiplier})` : '';
+    ctx.fillStyle = skin.color;
     ctx.font      = '13px monospace';
-    ctx.fillText(`SKIN: ${SKINS[skinIndex].name}`, W / 2, 46);
+    ctx.fillText(`SKIN: ${skin.name}${bonus}`, W / 2, 46);
   }
 
   drawEffectBars();
